@@ -8,7 +8,11 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
 from apscheduler.schedulers.background import BackgroundScheduler
 import uuid
 from manager.chat_manager import ChatManager, ChatConfig
+
+# 全局配置
 NEW_PAPER_CARD_VERSION = "1.0.4"
+PREV_DAY = 4  # 检查过去时间的范围（天数）
+
 class ArxivBot:
     def get_help_text(self):
         return (
@@ -107,7 +111,18 @@ class ArxivBot:
                 date_until = date_from = datetime.now().strftime("%Y-%m-%d")
             papers = await self.chat_manager.update_papers_for_chat(chat_id, date_from=date_from, date_until=date_until)
             if not papers:
-                null_msg = f"当前查询要求: {self.chat_manager.get_chat_config(chat_id)}\n 指定日期范围内没有满足查询条件的论文被挂到arxiv上哦~"
+                # 计算时间范围
+                from datetime import datetime, timedelta
+                if date_from and date_until:
+                    start_date = datetime.strptime(date_from, "%Y-%m-%d")
+                    end_date = datetime.strptime(date_until, "%Y-%m-%d")
+                    time_range = f"{start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
+                else:
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=PREV_DAY)
+                    time_range = f"{start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
+                
+                null_msg = f"当前查询要求: {self.chat_manager.get_chat_config(chat_id)}\n{time_range}期间没有用户想要的论文"
                 null_msg = json.dumps({"text": null_msg})
                 self.send_text_message("chat_id", chat_id, null_msg)
             else:
@@ -427,7 +442,13 @@ class ArxivBot:
                     print(f"成功发送 {len(papers)} 篇论文到群聊: {chat_id[:8]}")
                 else:
                     config = self.chat_manager.get_chat_config(chat_id)
-                    null_msg = f"当前查询要求: 必需关键词{config.required_keywords}, 可选关键词组{config.optional_keywords}\n今天没有满足查询条件的论文被挂到arxiv上哦~"
+                    # 计算时间范围
+                    from datetime import datetime, timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=PREV_DAY)
+                    time_range = f"{start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
+                    
+                    null_msg = f"当前查询要求: 必需关键词{config.required_keywords}, 可选关键词组{config.optional_keywords}\n{time_range}期间没有用户想要的论文"
                     self.send_text_message("chat_id", chat_id, json.dumps({"text": null_msg}))
                     print(f"发送空结果消息到群聊: {chat_id[:8]}")
             except Exception as e:
